@@ -23,7 +23,8 @@ create table recommendations.user_item_rating (
 );
 ```
 
-After you have created the database fill it from the CSV files in this repository using the following commands:
+After you created the database, create a CSV file with the following content:
+user_id, item_id, rating where each is an integer value. Load this new file into Cassandra using the command below:
 
 ```
 copy user_item_rating (user_id, item_id, rating) from 'user_item_ratings.csv' with HEADER=true;
