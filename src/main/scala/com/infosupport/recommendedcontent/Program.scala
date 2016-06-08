@@ -18,19 +18,3 @@ object Program extends App {
 
   service.start()
 }
-
-
-object MyApp extends App {
-  val config = new SparkConf()
-
-  config.setMaster("local[*]")
-  config.setAppName("MySparkApp")
-
-  val sc = new SparkContext(config)
-
-  val records = sc.textFile("Somefile.csv")
-    .map(line => line.split(","))
-    .map(item => SomeData(item(0),item(1)))
-
-  records.count()
-}

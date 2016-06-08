@@ -35,10 +35,6 @@ class RecommenderSystem(sc: SparkContext) extends Actor with ActorLogging {
 
   var model: Option[MatrixFactorizationModel] = None
 
-  // Try to load the existing model data.
-  // This makes the service usable right away after it was down before, but was trained.
-  loadExistingModel()
-
   def receive = {
     case Train => trainModel()
     case GenerateRecommendations(userId) => generateRecommendations(userId, 10)
@@ -58,44 +54,6 @@ class RecommenderSystem(sc: SparkContext) extends Actor with ActorLogging {
 
   private def storeModel(model: MatrixFactorizationModel) = {
     this.model = Some(model)
-
-    // Store the model in HDFS in case the service is stopped and started
-    // after the model was trained.
-    val fileHost = context.system.settings.config.getString("hdfs.server")
-
-    model.save(sc, s"hdfs://${fileHost}/recommendations/")
-  }
-
-  /**
-    * Preloads an existing model for the service.
-    */
-  private def loadExistingModel() = {
-    val fileHost = context.system.settings.config.getString("hdfs.server")
-
-    val fileConfig = new Configuration()
-    fileConfig.set("fs.default.name",s"hdfs://${fileHost}/")
-
-    val fs = org.apache.hadoop.fs.FileSystem.get(fileConfig)
-
-    // Make sure that the model exists.
-    // And even if it exists, load with caution, it could break.
-    if(fs.exists(new Path("/recommendations/data/"))) {
-      try {
-        val loadedModel = MatrixFactorizationModel.load(sc,s"hdfs://${fileHost}/recommendations/")
-
-        log.info("Reloaded the model from HDFS, repartitioning and caching the data")
-
-        // Cache the product features when the model is loaded.
-        // This improves the performance of the recommender system quite a bit.
-        loadedModel.productFeatures.cache().repartition(sc.defaultMinPartitions)
-        loadedModel.userFeatures.repartition(sc.defaultMinPartitions)
-
-        this.model = Some(loadedModel)
-      }
-      catch {
-        case e: Exception => log.warning("There is a model available, but it is unloadable")
-      }
-    }
   }
 
   /**
@@ -107,10 +65,13 @@ class RecommenderSystem(sc: SparkContext) extends Actor with ActorLogging {
 
     // Generate recommendations based on the machine learning model.
     // When there's no trained model return an empty list instead.
-    val results = model
-      .flatMap(m => Some(m.recommendProducts(userId,count).toList))
-      .flatMap(recommendations => Some(recommendations.map(rating => Recommendation(rating.product,rating.rating))))
-      .getOrElse(Nil)
+    val results = model match {
+      case Some(m) => m.recommendProducts(userId,count)
+        .map(rating => Recommendation(rating.product,rating.rating))
+        .toList
+
+      case None => Nil
+    }
 
     sender ! Recommendations(results)
   }
