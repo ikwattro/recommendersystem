@@ -1,5 +1,4 @@
-Recommender system demo code
-----------------------------
+# Recommender system demo code
 
 ## Installation
 Before you use this demo, please make sure that you have Hadoop, Spark and Cassandra up and running.
